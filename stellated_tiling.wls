@@ -23,6 +23,7 @@ If[Length[argv] >= 2,
 	p = 3; q = 5; (* default *)
 ];
 
+colors = RandomColor[100];
 maxStellationLevel = If[Length[argv] >= 3, ToExpression[argv[[3]]], 1];
 maxRatio = Tan[maxStellationLevel Pi/p]/Tan[Pi/p];
 nGenerations = If[Length[argv] >= 4, ToExpression[argv[[4]]], 4];
@@ -30,13 +31,6 @@ dihedralSpherical = 0;
 dihedralHyperbolic = 0;
 
 shape = "three_worlds_" <> ToString[p, InputForm] <> "_" <> ToString[q, InputForm];
-colors = <|
-	3 -> Cyan,
-	5 -> Blue,
-	7 -> Red
-|>;
-
-color = If[KeyExistsQ[colors, p], colors[p], Red];
 
 splitEdgeParts = 8;
 
@@ -127,6 +121,8 @@ boost[t_] :=
 boostMatrix[angle_, axis_] := RotationMatrix[Arg[axis[[2]] + I axis[[3]]], {1, 0, 0}].boost[angle].RotationMatrix[-Arg[axis[[2]] + I axis[[3]]], {1, 0, 0}];
 
 boosted[vertices_, center_, axis_, angle_] := Map[# + center &, Map[# - center &, vertices].boostMatrix[angle, axis]];
+
+partialProjection[p_, center_, norm_, projectionRatio_] := (p - center)/Norm[(p - center)] * (Norm[(p - center)] (1 - projectionRatio) + projectionRatio * (4*norm*norm/Norm[(p - center)] ) )  + center;
 
 shapeWithParams = shape <> If[topView, "_top", ""] <> If[trackVertices, "_vert", ""] <> If[verticesOnly, "_only", ""];
 
@@ -321,9 +317,9 @@ elements3D[faces_, stellationLevel_, spinAngle_, sig_] := Module[
 			(* {
 				Opacity[opacity], FaceForm[color], Map[Polygon, displayFaces]
 			}, *)
-			{
+			(* {
 				Opacity[1], FaceForm[White], Map[Cylinder[#, thickness]&, displayEdges]
-			},
+			}, *)
 			{
 				Opacity[1], FaceForm[White], Map[Sphere[#[[1]], thickness * rangeZoom]&, verticesTally]
 			}
@@ -347,7 +343,11 @@ elements3D[faces_, stellationLevel_, spinAngle_, sig_] := Module[
 	surfaces = {};
 	For[fid = 1, fid <=Length[displayFaces], fid++,
 		face = displayFaces[[fid]];
+		oppositeCenter = -Mean[face];
+		oppositeCenter = oppositeCenter/Norm[oppositeCenter]*Norm[face[[1]]];
+		
 		triangles = splitFaceToTriangles[face];
+		Print[{fid, Mean[face], oppositeCenter}];
 		
 		For[triangleIndex = 1, triangleIndex <= Length[triangles], triangleIndex++,
 			triangle = triangles[[triangleIndex]];
@@ -356,13 +356,14 @@ elements3D[faces_, stellationLevel_, spinAngle_, sig_] := Module[
 				l2 (l1 triangle[[1]] + (1 - l1) triangle[[2]]) +
 				(1 - l2) (l1 triangle[[1]] + (1 - l1) triangle[[3]]);
 			normalizedPoints[l1_, l2_] := normalize[planarPoints[l1, l2], norm];
-			(* poincarePoints[l1_, l2_] := getPoincareExploded[normalizedPoints[l1, l2], norm]; *)
-
-			triangleCorners = {normalizedPoints[0,0], normalizedPoints[0,1], normalizedPoints[1,0]};
+			projectionRatio = 0.5;
+			projectedPoints[l1_, l2_] := If[fid == 1,
+				partialProjection[ normalizedPoints[l1, l2], oppositeCenter, norm, projectionRatio ],
+				normalizedPoints[l1, l2]];
 
 			surface = ParametricPlot3D[
-				normalizedPoints[l1, l2], {l1, 0.1, 0.9}, {l2, 0.1, 0.9},
-				PlotStyle -> {color, opacity}, Mesh -> None
+				projectedPoints[l1, l2], {l1, 0., 1}, {l2, 0., 1},
+				PlotStyle -> {colors[[fid]], opacity}, Mesh -> None
 			];
 			AppendTo[surfaces, surface];
 		];
