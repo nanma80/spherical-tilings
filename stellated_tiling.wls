@@ -2,25 +2,34 @@
 
 exportToPov = True;
 highlightCenter = False;
-stellateFaces = False;
+
 topView = True;
 topView = False;
 
-trackVertices = True;
-trackVertices = False;
+showEdges = True;
+(* showEdges = False; *)
 
-verticesOnly = True;
-(* verticesOnly = False; *)
+stellateAllFaces = True;
+stellateAllFaces = False;
+
+projectionRatio = 0.1;
 
 imageSize = {4, 3} * 720 / 3;
+lightSource = {50,-50,50};
+lighting = {{"Point", White, lightSource}};
 
-stepsPerTurn = If[trackVertices, 35, 35];
+stepsPerTurn = 35;
 (* stepsPerTurn = 3; *)
 
 argv = Rest @ $ScriptCommandLine;
 If[Length[argv] >= 2, 
 	p = ToExpression[argv[[1]]]; q = ToExpression[argv[[2]]],
 	p = 3; q = 5; (* default *)
+];
+
+If[Length[argv] >= 3, 
+	r = ToExpression[argv[[3]]],
+	r = 1; (* default *)
 ];
 
 colors = RandomColor[100];
@@ -30,9 +39,9 @@ nGenerations = If[Length[argv] >= 4, ToExpression[argv[[4]]], 4];
 dihedralSpherical = 0;
 dihedralHyperbolic = 0;
 
-shape = "three_worlds_" <> ToString[p, InputForm] <> "_" <> ToString[q, InputForm];
+shape = "star_tiling_" <> ToString[p, InputForm] <> "_" <> ToString[q, InputForm] <> "_" <> ToString[r, InputForm];
 
-splitEdgeParts = 8;
+splitEdgeParts = r * 8;
 
 imageFolder = "images";
 
@@ -67,7 +76,7 @@ getKlein[v_] := {0, v[[2]], v[[3]]}/v[[1]];
 getPoincare[v_] := {0, v[[2]], v[[3]]}/(1+v[[1]]);
 splitEdge[edge_, n_] := Table[{k edge[[1]] + (1-k) edge[[2]], (k+1/n) edge[[1]] + (1-k-1/n) edge[[2]] }, {k, 0, 1 - 1/n, 1/n}];
 HNormalize[v_, norm_] := v/HNorm[v] * norm;
-getHyperboloid[v_] := {-v[[1]], v[[2]], v[[3]]};
+getHyperboloid[v_] := {v[[1]], v[[2]], v[[3]]};
 normalize[v_, norm_] := v/Norm[v] * norm;
 scale[edge_, ratio_] := Module[
 	{center},
@@ -84,18 +93,14 @@ trimFaces[faces_] := Module[
 	trimmedFaces
 ];
 
-splitFaceToTriangles[face_] := Module[
+splitFaceToTriangles[face_, faceCenter_] := Module[
 	{},
 	output = {};
-	faceCenter = Mean[face];
-	faceCenter = faceCenter/Norm[faceCenter] * Norm[face[[1]]];
-	edges = getEdgesFromFace[face];
+	normalizedFaceCenter = faceCenter/Norm[faceCenter] * Norm[face[[1]][[1]] ];
+	edges = face;
 	For[eid = 1, eid <= Length[edges], eid++,
 		edge = edges[[eid]];
-		edgeCenter = Mean[edge];
-		edgeCenter = edgeCenter/Norm[edgeCenter] * Norm[face[[1]]];
-		AppendTo[output, {faceCenter, edgeCenter, edge[[1]] }];
-		AppendTo[output, {faceCenter, edgeCenter, edge[[2]] }];
+		AppendTo[output, {normalizedFaceCenter, edge[[1]], edge[[2]] }];
 	];
 	
 	output
@@ -124,7 +129,7 @@ boosted[vertices_, center_, axis_, angle_] := Map[# + center &, Map[# - center &
 
 partialProjection[p_, center_, norm_, projectionRatio_] := (p - center)/Norm[(p - center)] * (Norm[(p - center)] (1 - projectionRatio) + projectionRatio * (4*norm*norm/Norm[(p - center)] ) )  + center;
 
-shapeWithParams = shape <> If[topView, "_top", ""] <> If[trackVertices, "_vert", ""] <> If[verticesOnly, "_only", ""];
+shapeWithParams = shape <> If[topView, "_top", ""] <> If[showEdges, "_show_edges", ""] <> If[stellateAllFaces, "_all_star", ""] <> "_" <> IntegerString[ Round[projectionRatio * 100], 10, 3 ];
 
 getGenerator[p_, q_] := Module[
 	{inner01, inner02, inner12, signature, p0, p1, p2, otherp2, ch2psi},
@@ -252,34 +257,66 @@ generateFaces[p_, q_] := Module[
 	orderedFaces
 ]
 
-elements3D[faces_, stellationLevel_, spinAngle_, sig_] := Module[
-	{allEdges, edges, allVertices, vertices, ratio, selectedFaces, displayFaces},
+doubleFaces[face_] := Flatten[ Map[{#[[1]], Mean[#] }&, getEdgesFromFace[face]], 1];
+stellateFace[halfEdges_, r_] := Module[
+	{},
+	output = {};
+	If[r == 1, output = halfEdges];
+	If[r > 1,
+		For[eid = 1, eid <= Length[halfEdges], eid++,
+		  norm = Norm[halfEdges[[1]][[1]]];
+		  direction = If[EvenQ[eid], 1, -1];
+		  nextEid = 
+		   Mod[eid + direction + 2 direction (r - 1) - 1, 
+		     Length[halfEdges]] + 1;
+		  segment1 = halfEdges[[eid]];
+		  segment2 = halfEdges[[nextEid]];
+		  If[EvenQ[eid], segment1 = Reverse[segment1]];
+		  If[EvenQ[nextEid], segment2 = Reverse[segment2]];
+		  normal1 = normalize[Apply[Cross, segment1], norm];
+		  normal2 = normalize[Apply[Cross, segment2], norm];
+		  intDirection = normalize[Cross[normal1, normal2], norm];
+		  normal1b = normalize[Cross[intDirection, segment1[[1]]], norm];
+		  int = If[normal1 . normal1b > 0, intDirection, -intDirection];
+	(* 	  Print[{direction, eid, nextEid, Norm[segment1[[1]] - segment1[[2]]],
+		     Norm[segment1[[1]] - segment2[[1]]],
+		    Norm[(int - segment1[[1]])]}]; *)
+		  AppendTo[output, {int, segment1[[2]]}]
+	  ];
+	];
 
-	ratio = Tan[stellationLevel Pi/p]/Tan[Pi/p]//Simplify;
-	Print[{stellationLevel, ratio}];
+	output
+];
+
+
+elements3D[faces_, stellationLevel_, spinAngle_, sig_] := Module[
+	{allEdges, edges, allVertices, vertices, ratio, selectedFaces, edgeGroups},
 
 	rotation = RotationMatrix[spinAngle, {1, 0, 0}];
-	(* selectedFaces = Select[faces, (Total[#]/Length[#])[[1]] < 10 &]; *)
 	selectedFaces = Map[(#.rotation) &, faces, {2}];
-	(* kleinFaces = Map[getKlein, faces, {2}]; *)
-	displayFaces = Map[getHyperboloid, selectedFaces, {2}];
+	faceCenters = Map[Mean, selectedFaces];
+	selectedFaces = Map[doubleFaces, selectedFaces];
 
-	If[stellateFaces, 
-		displayFaces = Map[scaleFace[#, ratio, Ceiling[stellationLevel]]&, displayFaces]
+	inners = Map[N[#.lightSource] &, faceCenters];
+
+	edgeGroups = Map[getEdgesFromFace, selectedFaces];
+	highlightedFaceId = Ordering[inners, -1][[1]];
+	edgeGroups[[highlightedFaceId]] = stellateFace[edgeGroups[[highlightedFaceId]], r];
+
+	If[stellateAllFaces,
+		edgeGroups = Map[stellateFace[#, r]&, edgeGroups];
 	];
 
 	(* Print["There are " <> IntegerString[Length[selectedFaces]] <> " faces."]; *)
-	allEdges = Flatten[Map[getEdgesFromFace, selectedFaces], 1];
+	allEdges = Flatten[edgeGroups, 1];
 	edges = Union[allEdges , SameTest -> sameEdge];
 
 	(* Print["There are " <> IntegerString[Length[edges]] <> " edges in total."]; *)
-	(* norm = HNorm[edges[[1]][[1]]]; *)
-
-	(* splitEdges = Flatten[ Map[splitEdge[#, splitEdgeParts]&, edges], 1]; *)
-	(* splitEdges = Map[HNormalize[#, norm]&, splitEdges, {2}]; *)
+	norm = Norm[edges[[1]][[1]]];
+	splitEdges = Flatten[ Map[splitEdge[#, splitEdgeParts]&, edges], 1];
+	splitEdges = Map[normalize[#, norm]&, splitEdges, {2}];
 	(* Print["There are " <> IntegerString[Length[splitEdges]] <> " edges after split."]; *)
-	displayEdges = Map[getHyperboloid, edges, {2}];
-	displayEdges = Map[scale[#, ratio] &, displayEdges];
+	displayEdges = splitEdges;
 
 	allVertices = Round[Flatten[displayEdges, 1], epsilon];
 	vertices = Union[allVertices , SameTest -> ApproxSamePoint];
@@ -290,46 +327,18 @@ elements3D[faces_, stellationLevel_, spinAngle_, sig_] := Module[
 	Print[Map[Length, {faces, allEdges, edges, allVertices, vertices}]];
 	Print[tallyTally];
 
-	centeredFaces = Select[faces, (Abs[Total[#][[2]]]<0.001)&&(Abs[Total[#][[3]]]<0.001)&];
-	displayCenteredFaces = Map[getHyperboloid, centeredFaces, {2}];
-	displayCenteredFaces = Map[(# + {0.001, 0, 0})&, displayCenteredFaces, {2}];
-
-	centeredEdges = Flatten[Map[getEdgesFromFace, centeredFaces], 1];
-	
-
-	(* splitCenteredEdges = Map[HNormalize[#, norm]&, splitCenteredEdges, {2}]; *)
-	(* Print["There are " <> IntegerString[Length[centeredEdges]] <> " centered edges after split."]; *)
-	displayCenteredEdges = Map[getHyperboloid, centeredEdges, {2}];
-
-	(* centeredVertices = displayCenteredFaces[[1]]; *)
-
-	(* planar *)
-	color = Blue;
-	opacity = 0.5;
-
-	(* hyperbolic *)
-	If[sig > 0, color = Red; opacity = If[trackVertices, 0.3, 1]];
-
-	(* spherical, default to 0.4*)
-	If[sig < 0, color = Green; opacity = 0.3];
-
-	elements = {
-			(* {
-				Opacity[opacity], FaceForm[color], Map[Polygon, displayFaces]
-			}, *)
-			(* {
-				Opacity[1], FaceForm[White], Map[Cylinder[#, thickness]&, displayEdges]
-			}, *)
-			{
-				Opacity[1], FaceForm[White], Map[Sphere[#[[1]], thickness * rangeZoom]&, verticesTally]
-			}
-	};
-
-	lighting = {{"Point", White, {50, -50, 50}}};
-	range = 1;
+	opacity = 0.3;
+	range = (1 + projectionRatio)^2;
 	thickness = 0.01;
 	viewCenter = {0, 0, 0};
-	If[trackVertices, viewCenter = viewCenter + rotatePivot];
+
+	elements = {};
+
+	If[showEdges,
+		AppendTo[elements, {
+			Opacity[1], FaceForm[White], Map[Cylinder[#, thickness]&, displayEdges]
+		}];
+	];
 
 	graph = Graphics3D[
 		elements,
@@ -339,16 +348,15 @@ elements3D[faces_, stellationLevel_, spinAngle_, sig_] := Module[
 		Lighting -> lighting
 	];
 
-
 	surfaces = {};
-	For[fid = 1, fid <=Length[displayFaces], fid++,
-		face = displayFaces[[fid]];
-		oppositeCenter = -Mean[face];
-		oppositeCenter = oppositeCenter/Norm[oppositeCenter]*Norm[face[[1]]];
-		
-		triangles = splitFaceToTriangles[face];
-		Print[{fid, Mean[face], oppositeCenter}];
-		
+	For[fid = 1, fid <=Length[edgeGroups], fid++,
+		face = edgeGroups[[fid]];
+		faceCenter = faceCenters[[fid]];
+		oppositeCenter = -faceCenter;
+		oppositeCenter = oppositeCenter/Norm[oppositeCenter]*Norm[face[[1]][[1]] ];
+		triangles = splitFaceToTriangles[face, faceCenter];
+		Print[{fid, faceCenter}];
+
 		For[triangleIndex = 1, triangleIndex <= Length[triangles], triangleIndex++,
 			triangle = triangles[[triangleIndex]];
 			norm = Norm[triangle[[1]]];
@@ -356,14 +364,16 @@ elements3D[faces_, stellationLevel_, spinAngle_, sig_] := Module[
 				l2 (l1 triangle[[1]] + (1 - l1) triangle[[2]]) +
 				(1 - l2) (l1 triangle[[1]] + (1 - l1) triangle[[3]]);
 			normalizedPoints[l1_, l2_] := normalize[planarPoints[l1, l2], norm];
-			projectionRatio = 0.5;
-			projectedPoints[l1_, l2_] := If[fid == 1,
+			
+			projectedPoints[l1_, l2_] := If[fid == highlightedFaceId || stellateAllFaces,
 				partialProjection[ normalizedPoints[l1, l2], oppositeCenter, norm, projectionRatio ],
 				normalizedPoints[l1, l2]];
 
 			surface = ParametricPlot3D[
 				projectedPoints[l1, l2], {l1, 0., 1}, {l2, 0., 1},
-				PlotStyle -> {colors[[fid]], opacity}, Mesh -> None
+				PlotStyle -> {colors[[fid]]}, Mesh -> None,
+				PlotPoints -> splitEdgeParts,
+				MaxRecursion -> 2
 			];
 			AppendTo[surfaces, surface];
 		];
@@ -378,11 +388,13 @@ exportFrame[faces_, stellationLevel_, spinAngle_, frameIndex_, outputFolderName_
 	{},
 
 	graph = elements3D[faces, stellationLevel, spinAngle, -1];
+	testing = (outputFolderName == "test");
 
 	outputFolder = FileNameJoin[{imageFolder, outputFolderName}];
 	If[!DirectoryQ[outputFolder], CreateDirectory[outputFolder]];
 
 	outputFileName = "spinning_frame_" <> IntegerString[frameIndex, 10, 4] <> ".png";
+	If[testing, outputFileName = shapeWithParams <> ".png"];
 	outputFileName = FileNameJoin[{outputFolder, outputFileName}];
 
 	cropCommand = "mogrify -crop " <> IntegerString[imageSize[[2]]] <> "x" <> IntegerString[imageSize[[2]]] <> "+" <> IntegerString[(imageSize[[1]]-imageSize[[2]])/2] <> "+0 " <> outputFileName;
@@ -456,10 +468,7 @@ exportAnimation[] := Module[
 			traceFaces37 = Join[traceFaces37, Flatten[faces37, 1]]
 		];
 
-		If[verticesOnly,
-			exportFrame[{}, {}, {}, 1.0, 0, frameIndex, outputFolderName],
-			exportFrame[faces35, faces36, faces37, 1.0, 0, frameIndex, outputFolderName];
-		];
+		exportFrame[faces35, faces36, faces37, 1.0, 0, frameIndex, outputFolderName];
 		frameIndex++;
 
 		rotateEdge = rotateEdges[[rotateIndex]];
@@ -475,10 +484,8 @@ exportAnimation[] := Module[
 				traceFaces37 = Join[traceFaces37, Flatten[turnedFaces37, 1]]
 			];
 
-			If[verticesOnly,
-				exportFrame[{}, {}, {}, 1.0, 0, frameIndex, outputFolderName],
-				exportFrame[turnedFaces35, faces36, turnedFaces37, 1.0, 0, frameIndex, outputFolderName];
-			];
+			exportFrame[turnedFaces35, faces36, turnedFaces37, 1.0, 0, frameIndex, outputFolderName];
+
 			frameIndex++;
 		];
 
