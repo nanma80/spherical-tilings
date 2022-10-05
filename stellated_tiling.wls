@@ -12,14 +12,19 @@ showEdges = True;
 stellateAllFaces = True;
 stellateAllFaces = False;
 
+(* projectionRatio = 0.003; *)
+
+(* projectionRatio = 0: touches the sphere. = 1: projected to a plane *)
 projectionRatio = 0.1;
+
+(* stellationLevel = 0, no stellation. Original spherical polygon. = 1: full stellation *)
+stellationLevel = 1;
 
 imageSize = {4, 3} * 720 / 3;
 lightSource = {50,-50,50};
 lighting = {{"Point", White, lightSource}};
 
-stepsPerTurn = 35;
-(* stepsPerTurn = 3; *)
+frameCount = 10;
 
 argv = Rest @ $ScriptCommandLine;
 If[Length[argv] >= 2, 
@@ -31,8 +36,12 @@ If[Length[argv] >= 3,
 	r = ToExpression[argv[[3]]],
 	r = 1; (* default *)
 ];
+splitEdgeParts = r * 8;
+If[projectionRatio < 0.02, splitEdgeParts = r * 8 * 3];
 
-colors = RandomColor[100];
+colorGroup = {Red, Blue, Green, Yellow, Magenta, Cyan, Brown, Orange};
+colors = Join[colorGroup, Map[Darker[#, 0.5]&, colorGroup], Map[Lighter[#, 0.5]&, colorGroup]];
+
 maxStellationLevel = If[Length[argv] >= 3, ToExpression[argv[[3]]], 1];
 maxRatio = Tan[maxStellationLevel Pi/p]/Tan[Pi/p];
 nGenerations = If[Length[argv] >= 4, ToExpression[argv[[4]]], 4];
@@ -41,8 +50,8 @@ dihedralHyperbolic = 0;
 
 shape = "star_tiling_" <> ToString[p, InputForm] <> "_" <> ToString[q, InputForm] <> "_" <> ToString[r, InputForm];
 
-splitEdgeParts = r * 8;
 
+norm = 1.0;
 imageFolder = "images";
 
 Needs["POVRayRender`"];
@@ -129,7 +138,7 @@ boosted[vertices_, center_, axis_, angle_] := Map[# + center &, Map[# - center &
 
 partialProjection[p_, center_, norm_, projectionRatio_] := (p - center)/Norm[(p - center)] * (Norm[(p - center)] (1 - projectionRatio) + projectionRatio * (4*norm*norm/Norm[(p - center)] ) )  + center;
 
-shapeWithParams = shape <> If[topView, "_top", ""] <> If[showEdges, "_show_edges", ""] <> If[stellateAllFaces, "_all_star", ""] <> "_" <> IntegerString[ Round[projectionRatio * 100], 10, 3 ];
+shapeWithParams = shape <> If[topView, "_top", ""] <> If[showEdges, "_show_edges", ""] <> If[stellateAllFaces, "_all_star", ""] <> "_" <> IntegerString[ Round[projectionRatio * 100], 10, 3 ] <> "_" <> IntegerString[ Round[stellationLevel * 100], 10, 3 ];
 
 getGenerator[p_, q_] := Module[
 	{inner01, inner02, inner12, signature, p0, p1, p2, otherp2, ch2psi},
@@ -258,13 +267,13 @@ generateFaces[p_, q_] := Module[
 ]
 
 doubleFaces[face_] := Flatten[ Map[{#[[1]], Mean[#] }&, getEdgesFromFace[face]], 1];
-stellateFace[halfEdges_, r_] := Module[
-	{},
+stellateFace[halfEdges_, r_, level_] := Module[
+	{output, eid, direction, nextEid, segment1, segment2, normal1, normal2, intDirection, normal1b, int},
 	output = {};
 	If[r == 1, output = halfEdges];
 	If[r > 1,
 		For[eid = 1, eid <= Length[halfEdges], eid++,
-		  norm = Norm[halfEdges[[1]][[1]]];
+		  (* norm = Norm[halfEdges[[1]][[1]]]; *)
 		  direction = If[EvenQ[eid], 1, -1];
 		  nextEid = 
 		   Mod[eid + direction + 2 direction (r - 1) - 1, 
@@ -278,10 +287,13 @@ stellateFace[halfEdges_, r_] := Module[
 		  intDirection = normalize[Cross[normal1, normal2], norm];
 		  normal1b = normalize[Cross[intDirection, segment1[[1]]], norm];
 		  int = If[normal1 . normal1b > 0, intDirection, -intDirection];
-	(* 	  Print[{direction, eid, nextEid, Norm[segment1[[1]] - segment1[[2]]],
-		     Norm[segment1[[1]] - segment2[[1]]],
-		    Norm[(int - segment1[[1]])]}]; *)
-		  AppendTo[output, {int, segment1[[2]]}]
+		  betweenInt1 = level * int + (1-level) * segment1[[1]];
+		  betweenInt2 = level * int + (1-level) * segment2[[1]];
+		  AppendTo[output, {betweenInt1, segment1[[2]]}];
+		  If[level < 1 && EvenQ[eid],
+			  AppendTo[output, {betweenInt1, betweenInt2}];
+		  ];
+		  (* AppendTo[output, {int, segment1[[2]]}]; *)
 	  ];
 	];
 
@@ -301,23 +313,36 @@ elements3D[faces_, stellationLevel_, spinAngle_, sig_] := Module[
 
 	edgeGroups = Map[getEdgesFromFace, selectedFaces];
 	highlightedFaceId = Ordering[inners, -1][[1]];
-	edgeGroups[[highlightedFaceId]] = stellateFace[edgeGroups[[highlightedFaceId]], r];
-
+	
 	If[stellateAllFaces,
-		edgeGroups = Map[stellateFace[#, r]&, edgeGroups];
+		edgeGroups = Map[stellateFace[#, r, stellationLevel]&, edgeGroups],
+		edgeGroups[[highlightedFaceId]] = stellateFace[edgeGroups[[highlightedFaceId]], r, stellationLevel];
 	];
 
-	(* Print["There are " <> IntegerString[Length[selectedFaces]] <> " faces."]; *)
-	allEdges = Flatten[edgeGroups, 1];
+	displayEdges = {};
+	For[fid = 1, fid <= Length[edgeGroups], fid++,
+		face = edgeGroups[[fid]];
+		faceCenter = faceCenters[[fid]];
+		oppositeCenter = -faceCenter;
+		oppositeCenter = oppositeCenter/Norm[oppositeCenter]*Norm[face[[1]][[1]] ];
+
+		splitEdges = Flatten[ Map[splitEdge[#, splitEdgeParts]&, face], 1];
+		splitEdges = Map[normalize[#, norm]&, splitEdges, {2}];
+		If[fid == highlightedFaceId || stellateAllFaces,
+			splitEdges = Map[partialProjection[#, oppositeCenter, norm, projectionRatio ]&, splitEdges, {2}];
+		];
+		displayEdges = Join[displayEdges, splitEdges];
+	];
+
+(* 	allEdges = Flatten[edgeGroups, 1];
 	edges = Union[allEdges , SameTest -> sameEdge];
 
-	(* Print["There are " <> IntegerString[Length[edges]] <> " edges in total."]; *)
-	norm = Norm[edges[[1]][[1]]];
 	splitEdges = Flatten[ Map[splitEdge[#, splitEdgeParts]&, edges], 1];
 	splitEdges = Map[normalize[#, norm]&, splitEdges, {2}];
-	(* Print["There are " <> IntegerString[Length[splitEdges]] <> " edges after split."]; *)
-	displayEdges = splitEdges;
 
+
+	displayEdges = splitEdges;
+ *)
 	allVertices = Round[Flatten[displayEdges, 1], epsilon];
 	vertices = Union[allVertices , SameTest -> ApproxSamePoint];
 	verticesTally = Tally[allVertices];
@@ -355,11 +380,11 @@ elements3D[faces_, stellationLevel_, spinAngle_, sig_] := Module[
 		oppositeCenter = -faceCenter;
 		oppositeCenter = oppositeCenter/Norm[oppositeCenter]*Norm[face[[1]][[1]] ];
 		triangles = splitFaceToTriangles[face, faceCenter];
-		Print[{fid, faceCenter}];
+		(* Print[{fid, faceCenter, Length[triangles]}]; *)
 
 		For[triangleIndex = 1, triangleIndex <= Length[triangles], triangleIndex++,
 			triangle = triangles[[triangleIndex]];
-			norm = Norm[triangle[[1]]];
+			(* norm = Norm[triangle[[1]]]; *)
 			planarPoints[l1_, l2_] := 
 				l2 (l1 triangle[[1]] + (1 - l1) triangle[[2]]) +
 				(1 - l2) (l1 triangle[[1]] + (1 - l1) triangle[[3]]);
@@ -428,88 +453,21 @@ exportAnimation[] := Module[
 	outputFolder = FileNameJoin[{imageFolder, outputFolderName}];
 	If[!DirectoryQ[outputFolder], CreateDirectory[outputFolder]];
 
-	gifFileName = shapeWithParams <> "_spinning";
+	gifFileName = shapeWithParams <> "_stellating";
 	gifFolder = FileNameJoin[{imageFolder, shape}];
 	If[!DirectoryQ[gifFolder], CreateDirectory[gifFolder]];
 
 	faces = generateFaces[p, q];
 
-	Print[Map[Length, {faces35, faces36, faces37}]];
-	faces36 = trimFaces[faces36];
-	faces37 = trimFaces[faces37];
-	Print["after trimming"];
-	Print[Map[Length, {faces35, faces36, faces37}]];
+	stellationLevels = Table[k/(frameCount-1), {k, 0, frameCount-1}];
 
-	int56 = Intersection[faces35, faces36, SameTest -> sameCenter];
-	int67 = Intersection[faces37, faces36, SameTest -> sameCenter];
-	intAll = Intersection[int56, int67, SameTest -> sameCenter];
-	Print["before rotation"];
-	Print[Map[Length, {int56, int67, intAll}]];
-
-	edges = getEdgesFromFace[intAll[[1]]];
-	Print[edges//Round[#, epsilon]&];
-
-	rotatePivot = edges[[1]][[2]];
-	Print["rotatePivot"];
-	Print[rotatePivot];
-	rotateEdges = {edges[[1]]};
-	For[rotateIndex = 1, rotateIndex < q, rotateIndex++,
-		newRotateEdge = rotated[rotateEdges[[-1]], rotatePivot, {1, 0, 0}, 2 Pi/q];
-		AppendTo[rotateEdges, newRotateEdge];
-	];
-	Print[rotateEdges//Round[#, epsilon]&];
-
-	frameIndex = 1;
-	For[rotateIndex = 1, rotateIndex <= q, rotateIndex++,
-		Print["rotateIndex: " <> IntegerString[rotateIndex] <> " initial image"];
-		
-		If[trackVertices,
-			traceFaces35 = Join[traceFaces35, Flatten[faces35, 1]];
-			traceFaces37 = Join[traceFaces37, Flatten[faces37, 1]]
-		];
-
-		exportFrame[faces35, faces36, faces37, 1.0, 0, frameIndex, outputFolderName];
-		frameIndex++;
-
-		rotateEdge = rotateEdges[[rotateIndex]];
-		edgeCenter = Mean[rotateEdge];
-		edgeVector = rotateEdge[[1]] - rotateEdge[[2]];
-
-		For[animationIndex = 1, animationIndex <= stepsPerTurn, animationIndex++,
-			turnedFaces37 = Map[boosted[#, edgeCenter, edgeVector, dihedralHyperbolic/stepsPerTurn*animationIndex]&, faces37];
-			turnedFaces35 = Map[rotated[#, edgeCenter, edgeVector, dihedralSpherical/stepsPerTurn*animationIndex]&, faces35];
-			Print["rotateIndex: " <> IntegerString[rotateIndex] <> " animationIndex: " <> IntegerString[animationIndex]];
-			If[trackVertices,
-				traceFaces35 = Join[traceFaces35, Flatten[turnedFaces35, 1]];
-				traceFaces37 = Join[traceFaces37, Flatten[turnedFaces37, 1]]
-			];
-
-			exportFrame[turnedFaces35, faces36, turnedFaces37, 1.0, 0, frameIndex, outputFolderName];
-
-			frameIndex++;
-		];
-
-		faces37 = Map[boosted[#, edgeCenter, edgeVector, dihedralHyperbolic]&, faces37];
-		faces35 = Map[rotated[#, edgeCenter, edgeVector, dihedralSpherical]&, faces35];
-
-		int56 = Intersection[faces35, faces36, SameTest -> sameCenter];
-		int67 = Intersection[faces37, faces36, SameTest -> sameCenter];
-		intAll = Intersection[int56, int67, SameTest -> sameCenter];
-		
-		Print["After rotation " <> IntegerString[rotateIndex]];
-		Print[Map[Length, {int56, int67, intAll}]]
+	For[frameIndex = 1, frameIndex <= frameCount, frameIndex++,
+		stellationLevel = stellationLevels[[frameIndex]];
+		Print["exporting frame " <> IntegerString[frameIndex] <> " / " <> IntegerString[frameCount] ];
+		exportFrame[faces, stellationLevel, 0, frameIndex, outputFolderName];
 	];
 
-	If[trackVertices,
-		For[animationIndex = 1, animationIndex <= 2 * stepsPerTurn, animationIndex++,
-			Print["Final state animationIndex: " <> IntegerString[animationIndex]];
-			exportFrame[{}, {}, {}, 1.0, 0, frameIndex, outputFolderName];
-			frameIndex++;
-		];
-	];
-
-	frameCount = frameIndex - 1;
-	delay = If[frameCount >= 50, If[trackVertices, 3, 3], Floor[500/frameCount]];
+	delay = If[frameCount >= 50, 3, Floor[500/frameCount]];
 
 	gifCommand = "magick convert -quiet +repage -alpha remove -loop 0 -delay " <> IntegerString[delay] <> " -dispose 2 " <> outputFolder <> "\\spinning_frame*.png " <> gifFolder <> "\\" <> gifFileName <> ".gif";
 
@@ -530,7 +488,7 @@ exportAnimation[] := Module[
 
 faces = generateFaces[p, q];
 
-exportFrame[faces, 1.0, 0, 1, "test"];
+exportFrame[faces, stellationLevel, 0, 1, "test"];
 
 
 (* exportAnimation[]; *)
