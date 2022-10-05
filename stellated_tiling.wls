@@ -10,12 +10,12 @@ showEdges = True;
 (* showEdges = False; *)
 
 stellateAllFaces = True;
-stellateAllFaces = False;
+(* stellateAllFaces = False; *)
 
 (* projectionRatio = 0.003; *)
 
 (* projectionRatio = 0: touches the sphere. = 1: projected to a plane *)
-projectionRatio = 0.1;
+projectionRatio = .2;
 
 (* stellationLevel = 0, no stellation. Original spherical polygon. = 1: full stellation *)
 stellationLevel = 1;
@@ -36,8 +36,9 @@ If[Length[argv] >= 3,
 	r = ToExpression[argv[[3]]],
 	r = 1; (* default *)
 ];
+
 splitEdgeParts = r * 8;
-If[projectionRatio < 0.02, splitEdgeParts = r * 8 * 3];
+If[projectionRatio < 0.15, splitEdgeParts = r * 8 * 3];
 
 colorGroup = {Red, Blue, Green, Yellow, Magenta, Cyan, Brown, Orange};
 colors = Join[colorGroup, Map[Darker[#, 0.5]&, colorGroup], Map[Lighter[#, 0.5]&, colorGroup]];
@@ -136,7 +137,12 @@ boostMatrix[angle_, axis_] := RotationMatrix[Arg[axis[[2]] + I axis[[3]]], {1, 0
 
 boosted[vertices_, center_, axis_, angle_] := Map[# + center &, Map[# - center &, vertices].boostMatrix[angle, axis]];
 
-partialProjection[p_, center_, norm_, projectionRatio_] := (p - center)/Norm[(p - center)] * (Norm[(p - center)] (1 - projectionRatio) + projectionRatio * (4*norm*norm/Norm[(p - center)] ) )  + center;
+(* line between a point on sphere and the stereographic projection on a plane *)
+(* partialProjection[p_, center_, norm_, projectionRatio_] := (p - center)/Norm[(p - center)] * (Norm[(p - center)] (1 - projectionRatio) + projectionRatio * (4*norm*norm/Norm[(p - center)] ) )  + center; *)
+
+(* scale out the point away from origin *)
+partialProjection[p_, center_, norm_, projectionRatio_] := ArcCos[Dot[p, -center]/Norm[p]/Norm[center]]/Pi*projectionRatio * p + p;
+
 
 shapeWithParams = shape <> If[topView, "_top", ""] <> If[showEdges, "_show_edges", ""] <> If[stellateAllFaces, "_all_star", ""] <> "_" <> IntegerString[ Round[projectionRatio * 100], 10, 3 ] <> "_" <> IntegerString[ Round[stellationLevel * 100], 10, 3 ];
 
@@ -353,7 +359,8 @@ elements3D[faces_, stellationLevel_, spinAngle_, sig_] := Module[
 	Print[tallyTally];
 
 	opacity = 0.3;
-	range = (1 + projectionRatio)^2;
+	range = 1;
+	range = (1 + projectionRatio);
 	thickness = 0.01;
 	viewCenter = {0, 0, 0};
 
@@ -488,10 +495,10 @@ exportAnimation[] := Module[
 
 faces = generateFaces[p, q];
 
-exportFrame[faces, stellationLevel, 0, 1, "test"];
+(* exportFrame[faces, stellationLevel, 0, 1, "test"]; *)
 
 
-(* exportAnimation[]; *)
+exportAnimation[];
 
 
 (* 
