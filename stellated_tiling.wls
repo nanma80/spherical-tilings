@@ -25,7 +25,7 @@ lightSource = {50,-50,50};
 lighting = {{"Point", White, lightSource}};
 
 (* frameCount = 10; *)
-frameCount = 200;
+frameCount = 150;
 
 argv = Rest @ $ScriptCommandLine;
 If[Length[argv] >= 2, 
@@ -39,7 +39,7 @@ If[Length[argv] >= 3,
 ];
 
 splitEdgeParts = r * 8;
-If[projectionRatio < 0.15, splitEdgeParts = r * 8 * 3];
+If[projectionRatio < 0.11, splitEdgeParts = r * 8 * 3];
 
 colorGroup = {Red, Blue, Green, Yellow, Magenta, Cyan, Brown, Orange};
 colors = Join[colorGroup, Map[Darker[#, 0.5]&, colorGroup], Map[Lighter[#, 0.5]&, colorGroup]];
@@ -316,7 +316,10 @@ elements3D[faces_, stellationLevel_, spinAngle_, sig_] := Module[
 	faceCenters = Map[Mean, selectedFaces];
 	selectedFaces = Map[doubleFaces, selectedFaces];
 
-	inners = Map[N[#.lightSource] &, faceCenters];
+	(* highlightDirection = lightSource; *)
+	highlightDirection = {0.2, -0.2, 1};
+
+	inners = Map[N[#.highlightDirection] &, faceCenters];
 
 	edgeGroups = Map[getEdgesFromFace, selectedFaces];
 	highlightedFaceId = Ordering[inners, -1][[1]];
@@ -359,9 +362,8 @@ elements3D[faces_, stellationLevel_, spinAngle_, sig_] := Module[
 	Print[Map[Length, {faces, allEdges, edges, allVertices, vertices}]];
 	Print[tallyTally];
 
-	opacity = 0.3;
 	range = 1;
-	range = (1 + projectionRatio);
+	(* range = (1 + projectionRatio); *)
 	thickness = 0.01;
 	viewCenter = {0, 0, 0};
 
@@ -375,8 +377,8 @@ elements3D[faces_, stellationLevel_, spinAngle_, sig_] := Module[
 
 	graph = Graphics3D[
 		elements,
-		ViewPoint -> If[topView, {10, 0, 0} * 100, {3, -2.5, 3.5} * 10],
-		ViewVertical -> If[topView, {0, 1, 0}, {1, 0, 0}],
+		ViewPoint -> {50, -50, 20},
+		ViewVertical -> {0, 0, 1},
 		PlotRange -> {{viewCenter[[1]]-range, viewCenter[[1]]+range}, {viewCenter[[2]]-range, viewCenter[[2]]+range}, {viewCenter[[3]]-range, viewCenter[[3]]+range}},
 		Lighting -> lighting
 	];
@@ -389,6 +391,7 @@ elements3D[faces_, stellationLevel_, spinAngle_, sig_] := Module[
 		oppositeCenter = oppositeCenter/Norm[oppositeCenter]*Norm[face[[1]][[1]] ];
 		triangles = splitFaceToTriangles[face, faceCenter];
 		(* Print[{fid, faceCenter, Length[triangles]}]; *)
+		opacity = If[fid == highlightedFaceId || stellateAllFaces, 1, 0.2];
 
 		For[triangleIndex = 1, triangleIndex <= Length[triangles], triangleIndex++,
 			triangle = triangles[[triangleIndex]];
@@ -404,7 +407,7 @@ elements3D[faces_, stellationLevel_, spinAngle_, sig_] := Module[
 
 			surface = ParametricPlot3D[
 				projectedPoints[l1, l2], {l1, 0., 1}, {l2, 0., 1},
-				PlotStyle -> {colors[[fid]]}, Mesh -> None,
+				PlotStyle -> {colors[[fid]], Opacity[opacity]}, Mesh -> None,
 				PlotPoints -> splitEdgeParts,
 				MaxRecursion -> 2
 			];
