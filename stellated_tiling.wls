@@ -10,12 +10,13 @@ showEdges = True;
 (* showEdges = False; *)
 
 stellateAllFaces = True;
-stellateAllFaces = False;
+(* stellateAllFaces = False; *)
 
 (* projectionRatio = 0.003; *)
 
 (* projectionRatio = 0: touches the sphere. = 1: projected to a plane *)
 projectionRatio = .1;
+(* projectionRatio = .2; *)
 
 (* stellationLevel = 0, no stellation. Original spherical polygon. = 1: full stellation *)
 stellationLevel = 1;
@@ -25,7 +26,7 @@ lightSource = {50,-50,50};
 lighting = {{"Point", White, lightSource}};
 
 (* frameCount = 10; *)
-frameCount = 150;
+frameCount = 200;
 
 argv = Rest @ $ScriptCommandLine;
 If[Length[argv] >= 2, 
@@ -391,7 +392,7 @@ elements3D[faces_, stellationLevel_, spinAngle_, sig_] := Module[
 		oppositeCenter = oppositeCenter/Norm[oppositeCenter]*Norm[face[[1]][[1]] ];
 		triangles = splitFaceToTriangles[face, faceCenter];
 		(* Print[{fid, faceCenter, Length[triangles]}]; *)
-		opacity = If[fid == highlightedFaceId || stellateAllFaces, 1, 0.2];
+		opacity = If[fid == highlightedFaceId || stellateAllFaces, 1, stellationLevel * 0.2 + (1 - stellationLevel) * 1];
 
 		For[triangleIndex = 1, triangleIndex <= Length[triangles], triangleIndex++,
 			triangle = triangles[[triangleIndex]];
@@ -423,6 +424,7 @@ elements3D[faces_, stellationLevel_, spinAngle_, sig_] := Module[
 exportFrame[faces_, stellationLevel_, spinAngle_, frameIndex_, outputFolderName_] := Module[
 	{},
 
+	Return[];
 	graph = elements3D[faces, stellationLevel, spinAngle, -1];
 	testing = (outputFolderName == "test");
 
@@ -480,7 +482,12 @@ exportAnimation[] := Module[
 
 	delay = If[frameCount >= 50, 3, Floor[500/frameCount]];
 
-	gifCommand = "magick convert -quiet +repage -alpha remove -loop 0 -delay " <> IntegerString[delay] <> " -dispose 2 " <> outputFolder <> "\\spinning_frame*.png " <> gifFolder <> "\\" <> gifFileName <> ".gif";
+	loopBack = stellateAllFaces == False;
+
+  gifCommand = If[loopBack, 
+  	"magick convert -duplicate 1,-2-1 -quiet +repage -alpha remove -loop 0 -delay ",
+		"magick convert -quiet +repage -alpha remove -loop 0 -delay " ]
+		<> IntegerString[delay] <> " -dispose 2 " <> outputFolder <> "\\spinning_frame*.png " <> gifFolder <> "\\" <> gifFileName <> ".gif";
 
 	Print[gifCommand];
 	Run[gifCommand];
