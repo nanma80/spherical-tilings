@@ -15,8 +15,9 @@ stellateAllFaces = True;
 (* projectionRatio = 0.003; *)
 
 (* projectionRatio = 0: touches the sphere. = 1: projected to a plane *)
-projectionRatio = .1;
+projectionRatio = .01;
 (* projectionRatio = .2; *)
+maxProjectionRatio = 0.1;
 
 (* stellationLevel = 0, no stellation. Original spherical polygon. = 1: full stellation *)
 stellationLevel = 1;
@@ -25,7 +26,7 @@ imageSize = {4, 3} * 720 / 3;
 lightSource = {50,-50,50};
 lighting = {{"Point", White, lightSource}};
 
-(* frameCount = 10; *)
+(* frameCount = 3; *)
 frameCount = 200;
 
 argv = Rest @ $ScriptCommandLine;
@@ -316,6 +317,8 @@ elements3D[faces_, stellationLevel_, spinAngle_, sig_] := Module[
 	selectedFaces = Map[(#.rotation) &, faces, {2}];
 	faceCenters = Map[Mean, selectedFaces];
 	selectedFaces = Map[doubleFaces, selectedFaces];
+	ratio = projectionRatio;
+	If[stellateAllFaces, ratio = projectionRatio (1 - stellationLevel) + stellationLevel * maxProjectionRatio ];
 
 	(* highlightDirection = lightSource; *)
 	highlightDirection = {0.2, -0.2, 1};
@@ -340,7 +343,7 @@ elements3D[faces_, stellationLevel_, spinAngle_, sig_] := Module[
 		splitEdges = Flatten[ Map[splitEdge[#, splitEdgeParts]&, face], 1];
 		splitEdges = Map[normalize[#, norm]&, splitEdges, {2}];
 		If[fid == highlightedFaceId || stellateAllFaces,
-			splitEdges = Map[partialProjection[#, oppositeCenter, norm, projectionRatio ]&, splitEdges, {2}];
+			splitEdges = Map[partialProjection[#, oppositeCenter, norm, ratio ]&, splitEdges, {2}];
 		];
 		displayEdges = Join[displayEdges, splitEdges];
 	];
@@ -401,9 +404,9 @@ elements3D[faces_, stellationLevel_, spinAngle_, sig_] := Module[
 				l2 (l1 triangle[[1]] + (1 - l1) triangle[[2]]) +
 				(1 - l2) (l1 triangle[[1]] + (1 - l1) triangle[[3]]);
 			normalizedPoints[l1_, l2_] := normalize[planarPoints[l1, l2], norm];
-			
+
 			projectedPoints[l1_, l2_] := If[fid == highlightedFaceId || stellateAllFaces,
-				partialProjection[ normalizedPoints[l1, l2], oppositeCenter, norm, projectionRatio ],
+				partialProjection[ normalizedPoints[l1, l2], oppositeCenter, norm, ratio ],
 				normalizedPoints[l1, l2]];
 
 			surface = ParametricPlot3D[
@@ -425,6 +428,8 @@ exportFrame[faces_, stellationLevel_, spinAngle_, frameIndex_, outputFolderName_
 	{},
 
 	Return[];
+	(* If[EvenQ[frameIndex] == True, Return[]]; *)
+	(* If[EvenQ[frameIndex] == False, Return[]]; *)
 	graph = elements3D[faces, stellationLevel, spinAngle, -1];
 	testing = (outputFolderName == "test");
 
