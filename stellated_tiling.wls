@@ -10,13 +10,16 @@ showEdges = True;
 (* showEdges = False; *)
 
 stellateAllFaces = True;
-(* stellateAllFaces = False; *)
+stellateAllFaces = False;
+
+stereographicProjection = True;
+(* stereographicProjection = False; *)
 
 (* projectionRatio = 0.003; *)
 
 (* projectionRatio = 0: touches the sphere. = 1: projected to a plane *)
-projectionRatio = .01;
-(* projectionRatio = .2; *)
+(* projectionRatio = .01; *)
+projectionRatio = 1;
 maxProjectionRatio = 0.1;
 
 (* stellationLevel = 0, no stellation. Original spherical polygon. = 1: full stellation *)
@@ -144,10 +147,11 @@ boosted[vertices_, center_, axis_, angle_] := Map[# + center &, Map[# - center &
 (* partialProjection[p_, center_, norm_, projectionRatio_] := (p - center)/Norm[(p - center)] * (Norm[(p - center)] (1 - projectionRatio) + projectionRatio * (4*norm*norm/Norm[(p - center)] ) )  + center; *)
 
 (* scale out the point away from origin *)
-partialProjection[p_, center_, norm_, projectionRatio_] := ArcCos[Dot[p, -center]/Norm[p]/Norm[center]]/Pi*projectionRatio * p + p;
+partialProjection[p_, center_, norm_, projectionRatio_] := If[stereographicProjection,
+(p - center)/Norm[(p - center)] * (Norm[(p - center)] (1 - projectionRatio) + projectionRatio * (4*norm*norm/Norm[(p - center)] ) )  + center,
+ArcCos[Dot[p, -center]/Norm[p]/Norm[center]]/Pi*projectionRatio * p + p];
 
-
-shapeWithParams = shape <> If[topView, "_top", ""] <> If[showEdges, "_show_edges", ""] <> If[stellateAllFaces, "_all_star", ""] <> "_" <> IntegerString[ Round[projectionRatio * 100], 10, 3 ] <> "_" <> IntegerString[ Round[stellationLevel * 100], 10, 3 ];
+shapeWithParams = shape <> If[topView, "_top", ""] <> If[showEdges, "_show_edges", ""] <> If[stellateAllFaces, "_all_star", ""] <> If[stereographicProjection, "_stereo", ""] <> "_" <> IntegerString[ Round[projectionRatio * 100], 10, 3 ] <> "_" <> IntegerString[ Round[stellationLevel * 100], 10, 3 ];
 
 getGenerator[p_, q_] := Module[
 	{inner01, inner02, inner12, signature, p0, p1, p2, otherp2, ch2psi},
@@ -366,7 +370,7 @@ elements3D[faces_, stellationLevel_, spinAngle_, sig_] := Module[
 	Print[Map[Length, {faces, allEdges, edges, allVertices, vertices}]];
 	Print[tallyTally];
 
-	range = 1;
+	range = If[stereographicProjection, 4.5, 1];
 	(* range = (1 + projectionRatio); *)
 	thickness = 0.01;
 	viewCenter = {0, 0, 0};
@@ -381,7 +385,7 @@ elements3D[faces_, stellationLevel_, spinAngle_, sig_] := Module[
 
 	graph = Graphics3D[
 		elements,
-		ViewPoint -> {50, -50, 20},
+		ViewPoint -> If[stereographicProjection, faceCenters[[highlightedFaceId]] * 100, {50, -50, 20}],
 		ViewVertical -> {0, 0, 1},
 		PlotRange -> {{viewCenter[[1]]-range, viewCenter[[1]]+range}, {viewCenter[[2]]-range, viewCenter[[2]]+range}, {viewCenter[[3]]-range, viewCenter[[3]]+range}},
 		Lighting -> lighting
@@ -395,7 +399,7 @@ elements3D[faces_, stellationLevel_, spinAngle_, sig_] := Module[
 		oppositeCenter = oppositeCenter/Norm[oppositeCenter]*Norm[face[[1]][[1]] ];
 		triangles = splitFaceToTriangles[face, faceCenter];
 		(* Print[{fid, faceCenter, Length[triangles]}]; *)
-		opacity = If[fid == highlightedFaceId || stellateAllFaces, 1, stellationLevel * 0.2 + (1 - stellationLevel) * 1];
+		opacity = If[fid == highlightedFaceId || stellateAllFaces || stereographicProjection, 1, stellationLevel * 0.2 + (1 - stellationLevel) * 1];
 
 		For[triangleIndex = 1, triangleIndex <= Length[triangles], triangleIndex++,
 			triangle = triangles[[triangleIndex]];
@@ -427,7 +431,7 @@ elements3D[faces_, stellationLevel_, spinAngle_, sig_] := Module[
 exportFrame[faces_, stellationLevel_, spinAngle_, frameIndex_, outputFolderName_] := Module[
 	{},
 
-	Return[];
+	(* Return[]; *)
 	(* If[EvenQ[frameIndex] == True, Return[]]; *)
 	(* If[EvenQ[frameIndex] == False, Return[]]; *)
 	graph = elements3D[faces, stellationLevel, spinAngle, -1];
@@ -509,11 +513,10 @@ exportAnimation[] := Module[
   Print["Saved the video to " <> gifFolder <> "\\" <> gifFileName <> ".mp4"];
 ];
 
-(* faces = generateFaces[p, q]; *)
-(* exportFrame[faces, stellationLevel, 0, 1, "test"]; *)
+faces = generateFaces[p, q];
+exportFrame[faces, 1, 0, 1, "test"];
 
-
-exportAnimation[];
+(* exportAnimation[]; *)
 
 
 (* 
