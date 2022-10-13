@@ -24,8 +24,8 @@ imageSize = {4, 3} * 720 / 3;
 lightSource = {50,-50,50};
 lighting = {{"Point", White, lightSource}};
 
-frameCount = 3;
-(* frameCount = 200; *)
+(* frameCount = 3; *)
+frameCount = 200;
 
 argv = Rest @ $ScriptCommandLine;
 If[Length[argv] >= 2, 
@@ -39,7 +39,7 @@ If[Length[argv] >= 3,
 ];
 
 splitEdgeParts = r * 8;
-If[projectionRatio < 0.11, splitEdgeParts = r * 8 * 3 * 3];
+If[projectionRatio < 0.11, splitEdgeParts = r * 8 * 3 * 4];
 
 colorGroup = {Red, Blue, Green, Yellow, Magenta, Cyan, Brown, Orange};
 colors = Join[colorGroup, Map[Darker[#, 0.5]&, colorGroup], Map[Lighter[#, 0.5]&, colorGroup]];
