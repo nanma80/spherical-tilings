@@ -24,8 +24,8 @@ imageSize = {4, 3} * 720 / 3;
 lightSource = {50,-50,50};
 lighting = {{"Point", White, lightSource}};
 
-(* frameCount = 3; *)
-frameCount = 200;
+frameCount = 10;
+(* frameCount = 200; *)
 
 argv = Rest @ $ScriptCommandLine;
 If[Length[argv] >= 2, 
@@ -419,7 +419,7 @@ elements3D[faces_, stellationLevel_, spinAngle_, sig_] := Module[
 exportFrame[faces_, stellationLevel_, spinAngle_, frameIndex_, outputFolderName_] := Module[
 	{},
 
-	Return[];
+	(* Return[]; *)
 	(* If[EvenQ[frameIndex] == True, Return[]]; *)
 	(* If[EvenQ[frameIndex] == False, Return[]]; *)
 	graph = elements3D[faces, stellationLevel, spinAngle, -1];

@@ -13,13 +13,13 @@ stellateAllFaces = True;
 stellateAllFaces = False;
 
 stereographicProjection = True;
-(* stereographicProjection = False; *)
+stereographicProjection = False;
 
 (* projectionRatio = 0.003; *)
 
 (* projectionRatio = 0: touches the sphere. = 1: projected to a plane *)
-(* projectionRatio = .01; *)
-projectionRatio = 1;
+projectionRatio = .01;
+(* projectionRatio = 1; *)
 maxProjectionRatio = 0.1;
 
 (* stellationLevel = 0, no stellation. Original spherical polygon. = 1: full stellation *)
@@ -29,7 +29,7 @@ imageSize = {4, 3} * 720 / 3;
 lightSource = {50,-50,50};
 lighting = {{"Point", White, lightSource}};
 
-(* frameCount = 3; *)
+(* frameCount = 10; *)
 frameCount = 200;
 
 argv = Rest @ $ScriptCommandLine;
@@ -513,10 +513,10 @@ exportAnimation[] := Module[
   Print["Saved the video to " <> gifFolder <> "\\" <> gifFileName <> ".mp4"];
 ];
 
-faces = generateFaces[p, q];
-exportFrame[faces, 1, 0, 1, "test"];
+(* faces = generateFaces[p, q]; *)
+(* exportFrame[faces, 1, 0, 1, "test"]; *)
 
-(* exportAnimation[]; *)
+exportAnimation[];
 
 
 (* 
