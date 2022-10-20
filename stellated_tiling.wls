@@ -19,7 +19,7 @@ stereographicProjection = False;
 
 (* projectionRatio = 0: touches the sphere. = 1: projected to a plane *)
 projectionRatio = .01;
-(* projectionRatio = 1; *)
+(* projectionRatio = 0.12; *)
 maxProjectionRatio = 0.1;
 
 (* stellationLevel = 0, no stellation. Original spherical polygon. = 1: full stellation *)
@@ -30,7 +30,7 @@ lightSource = {50,-50,50};
 lighting = {{"Point", White, lightSource}};
 
 (* frameCount = 10; *)
-frameCount = 200;
+frameCount = 300;
 
 argv = Rest @ $ScriptCommandLine;
 If[Length[argv] >= 2, 
@@ -317,8 +317,9 @@ stellateFace[halfEdges_, r_, level_] := Module[
 elements3D[faces_, stellationLevel_, spinAngle_, sig_] := Module[
 	{allEdges, edges, allVertices, vertices, ratio, selectedFaces, edgeGroups},
 
-	rotation = RotationMatrix[spinAngle, {1, 0, 0}];
+	rotation = RotationMatrix[spinAngle, {0, 0, 1}];
 	selectedFaces = Map[(#.rotation) &, faces, {2}];
+	nonRotatingFaceCenters = Map[Mean, faces];
 	faceCenters = Map[Mean, selectedFaces];
 	selectedFaces = Map[doubleFaces, selectedFaces];
 	ratio = projectionRatio;
@@ -327,7 +328,7 @@ elements3D[faces_, stellationLevel_, spinAngle_, sig_] := Module[
 	(* highlightDirection = lightSource; *)
 	highlightDirection = {0.2, -0.2, 1};
 
-	inners = Map[N[#.highlightDirection] &, faceCenters];
+	inners = Map[N[#.highlightDirection] &, nonRotatingFaceCenters];
 
 	edgeGroups = Map[getEdgesFromFace, selectedFaces];
 	highlightedFaceId = Ordering[inners, -1][[1]];
@@ -431,7 +432,8 @@ elements3D[faces_, stellationLevel_, spinAngle_, sig_] := Module[
 exportFrame[faces_, stellationLevel_, spinAngle_, frameIndex_, outputFolderName_] := Module[
 	{},
 
-	(* Return[]; *)
+	Return[];
+	(* If[frameIndex <= 458, Return[]]; *)
 	(* If[EvenQ[frameIndex] == True, Return[]]; *)
 	(* If[EvenQ[frameIndex] == False, Return[]]; *)
 	graph = elements3D[faces, stellationLevel, spinAngle, -1];
@@ -482,16 +484,20 @@ exportAnimation[] := Module[
 	faces = generateFaces[p, q];
 
 	stellationLevels = Table[k/(frameCount-1), {k, 0, frameCount-1}];
-
-	For[frameIndex = 1, frameIndex <= frameCount, frameIndex++,
-		stellationLevel = stellationLevels[[frameIndex]];
-		Print["exporting frame " <> IntegerString[frameIndex] <> " / " <> IntegerString[frameCount] ];
-		exportFrame[faces, stellationLevel, 0, frameIndex, outputFolderName];
+	If[stellateAllFaces==False,
+		stellationLevels = Join[stellationLevels, Reverse[stellationLevels]];
 	];
 
-	delay = If[frameCount >= 50, 3, Floor[500/frameCount]];
+	For[frameIndex = 1, frameIndex <= Length[stellationLevels], frameIndex++,
+		spinAngle = (frameIndex-1)/(Length[stellationLevels]-1) * 2 * Pi;
+		stellationLevel = stellationLevels[[frameIndex]];
+		Print["exporting frame " <> IntegerString[frameIndex] <> " / " <> IntegerString[Length[stellationLevels]] ];
+		exportFrame[faces, stellationLevel, spinAngle, frameIndex, outputFolderName];
+	];
 
-	loopBack = stellateAllFaces == False;
+	delay = If[Length[stellationLevels] >= 50, 3, Floor[500/Length[stellationLevels]]];
+
+	loopBack = False;
 
   gifCommand = If[loopBack, 
   	"magick convert -duplicate 1,-2-1 -quiet +repage -alpha remove -loop 0 -delay ",
