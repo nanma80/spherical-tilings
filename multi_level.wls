@@ -416,11 +416,11 @@ elements3D[faces_, stellationLevel_, r_, spinAngle_, sig_] := Module[
 				normalizedPoints[l1, l2]];
 
 			surfaceColor = colors[[fid]];
-			If[fid == highlightedFaceId && (stellateAllFaces == False),
+			If[False && fid == highlightedFaceId && (stellateAllFaces == False),
 				surfaceColor = colors[[r]];
 			];
 			
-			If[fid == highlightedFaceId && (stellateAllFaces == False),
+			If[True || (fid == highlightedFaceId && (stellateAllFaces == False)),
 				surface = ParametricPlot3D[
 					projectedPoints[l1, l2], {l1, 0., 1}, {l2, 0., 1},
 					PlotStyle -> {surfaceColor, Opacity[opacity]}, Mesh -> None,
