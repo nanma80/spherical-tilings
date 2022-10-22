@@ -44,7 +44,7 @@ If[Length[argv] >= 3,
 	r = p - 1; (* default *)
 ];
 
-splitEdgeParts = r * 8 * If[p==5 && q==3, 2, 3];
+splitEdgeParts = r * 8 * 3;
 (* If[projectionRatio < 0.11, splitEdgeParts = r * 8 * 3]; *)
 
 colorGroup = {Red, Blue, Green, Yellow, Magenta, Cyan, Brown, Orange};
@@ -419,13 +419,17 @@ elements3D[faces_, stellationLevel_, r_, spinAngle_, sig_] := Module[
 			If[fid == highlightedFaceId && (stellateAllFaces == False),
 				surfaceColor = colors[[r]];
 			];
-			surface = ParametricPlot3D[
-				projectedPoints[l1, l2], {l1, 0., 1}, {l2, 0., 1},
-				PlotStyle -> {surfaceColor, Opacity[opacity]}, Mesh -> None,
-				PlotPoints -> splitEdgeParts,
-				MaxRecursion -> 2
+			
+			If[fid == highlightedFaceId && (stellateAllFaces == False),
+				surface = ParametricPlot3D[
+					projectedPoints[l1, l2], {l1, 0., 1}, {l2, 0., 1},
+					PlotStyle -> {surfaceColor, Opacity[opacity]}, Mesh -> None,
+					PlotPoints -> splitEdgeParts,
+					MaxRecursion -> 2
+				];
+				AppendTo[surfaces, surface];
 			];
-			AppendTo[surfaces, surface];
+			(* AppendTo[surfaces, surface]; *)
 		];
 	];
 
