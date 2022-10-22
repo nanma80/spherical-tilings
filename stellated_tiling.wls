@@ -10,7 +10,7 @@ showEdges = True;
 (* showEdges = False; *)
 
 stellateAllFaces = True;
-stellateAllFaces = False;
+(* stellateAllFaces = False; *)
 
 stereographicProjection = True;
 stereographicProjection = False;
@@ -406,8 +406,8 @@ elements3D[faces_, stellationLevel_, spinAngle_, sig_] := Module[
 			triangle = triangles[[triangleIndex]];
 			(* norm = Norm[triangle[[1]]]; *)
 			planarPoints[l1_, l2_] := 
-				l2 (l1 triangle[[1]] + (1 - l1) triangle[[2]]) +
-				(1 - l2) (l1 triangle[[1]] + (1 - l1) triangle[[3]]);
+				l2 (l1 triangle[[3]] + (1 - l1) triangle[[1]]) +
+				(1 - l2) (l1 triangle[[3]] + (1 - l1) triangle[[2]]);
 			normalizedPoints[l1_, l2_] := normalize[planarPoints[l1, l2], norm];
 
 			projectedPoints[l1_, l2_] := If[fid == highlightedFaceId || stellateAllFaces,
@@ -433,9 +433,9 @@ exportFrame[faces_, stellationLevel_, spinAngle_, frameIndex_, outputFolderName_
 	{},
 
 	Return[];
-	(* If[frameIndex <= 458, Return[]]; *)
+	(* If[frameIndex <= 248, Return[]]; *)
 	(* If[EvenQ[frameIndex] == True, Return[]]; *)
-	(* If[EvenQ[frameIndex] == False, Return[]]; *)
+	If[EvenQ[frameIndex] == False, Return[]];
 	graph = elements3D[faces, stellationLevel, spinAngle, -1];
 	testing = (outputFolderName == "test");
 
@@ -485,7 +485,8 @@ exportAnimation[] := Module[
 
 	stellationLevels = Table[k/(frameCount-1), {k, 0, frameCount-1}];
 	If[stellateAllFaces==False,
-		stellationLevels = Join[stellationLevels, Reverse[stellationLevels]];
+		stellationLevels = Join[stellationLevels, Reverse[stellationLevels]],
+		stellationLevels = Join[stellationLevels, Table[1, {k, Length[stellationLevels]}]];
 	];
 
 	For[frameIndex = 1, frameIndex <= Length[stellationLevels], frameIndex++,
